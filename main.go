@@ -6,7 +6,10 @@ import (
 
 func main() {
 
-	go k8s.RunOVSInformer()
+	ovsInformer := k8s.RunOVSInformer()
+	stopCh := make(chan struct{})
+	defer close(stopCh)
+	go ovsInformer.Run(stopCh)
 
 	select {}
 }

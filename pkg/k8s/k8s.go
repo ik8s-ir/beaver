@@ -45,14 +45,12 @@ func createConfig() (*rest.Config, error) {
 	return clientcmd.BuildConfigFromFlags("", configFile)
 }
 
-func RunOVSInformer() {
+func RunOVSInformer() cache.SharedIndexInformer {
 	resource := schema.GroupVersionResource{Group: "networking.ik8s.ir", Version: "v1alpha1", Resource: "ovsnets"}
 	informerfactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(CreateClient(), time.Second*30, "", nil)
 	ovsInformer := informerfactory.ForResource(resource).Informer()
 	ovsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: ovsnet.AddEvent,
 	})
-	stopCh := make(chan struct{})
-	defer close(stopCh)
-	go ovsInformer.Run(stopCh)
+	return ovsInformer
 }
