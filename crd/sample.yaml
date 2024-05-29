@@ -1,0 +1,6 @@
+apiVersion: networking.ik8s.ir/v1alpha1
+kind: OVSNet
+metadata:
+  name: sample
+spec:
+  bridge: "dd"
