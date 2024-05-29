@@ -1,12 +1,15 @@
 package k8s
 
 import (
+	"context"
 	"log"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/ik8s-ir/beaver/pkg/ovsnet"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/dynamic/dynamicinformer"
@@ -16,12 +19,14 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-var clientset *dynamic.DynamicClient
+var dynamicClient *dynamic.DynamicClient
+var ovsInformer cache.SharedIndexInformer
+var converter = runtime.DefaultUnstructuredConverter
 
 func CreateClient() *dynamic.DynamicClient {
 	// singleton
-	if clientset != nil {
-		return clientset
+	if dynamicClient != nil {
+		return dynamicClient
 	}
 
 	config, err := createConfig()
@@ -29,11 +34,11 @@ func CreateClient() *dynamic.DynamicClient {
 		log.Fatalf("Error creating config: %v", err)
 	}
 
-	clientset, err = dynamic.NewForConfig(config)
+	dynamicClient, err = dynamic.NewForConfig(config)
 	if err != nil {
-		log.Fatalf("Error creating clientset: %v", err)
+		log.Fatalf("Error creating dynamicClient: %v", err)
 	}
-	return clientset
+	return dynamicClient
 }
 
 func createConfig() (*rest.Config, error) {
@@ -45,12 +50,49 @@ func createConfig() (*rest.Config, error) {
 	return clientcmd.BuildConfigFromFlags("", configFile)
 }
 
-func RunOVSInformer() cache.SharedIndexInformer {
+func CreateOVSInformer() cache.SharedIndexInformer {
+	if ovsInformer != nil {
+		return ovsInformer
+	}
 	resource := schema.GroupVersionResource{Group: "networking.ik8s.ir", Version: "v1alpha1", Resource: "ovsnets"}
 	informerfactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(CreateClient(), time.Second*30, "", nil)
-	ovsInformer := informerfactory.ForResource(resource).Informer()
-	ovsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: ovsnet.AddEvent,
-	})
+	ovsInformer = informerfactory.ForResource(resource).Informer()
 	return ovsInformer
+}
+
+func FetchComputeNodes() *v1.NodeList {
+	nodeResource := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "nodes",
+	}
+	labelSelector := `node-role.kubernetes.io/compute`
+	nodes := &v1.NodeList{}
+	unstructuredNodes, err := dynamicClient.Resource(nodeResource).List(context.TODO(), metav1.ListOptions{
+		LabelSelector: labelSelector,
+	})
+
+	if err != nil {
+		log.Fatalf("Error fetching compute nodes: %v", err)
+	}
+	converter.FromUnstructured(unstructuredNodes.UnstructuredContent(), nodes)
+	return nodes
+}
+
+func GetOVSPodByNode(namespace string, nodeName string) v1.Pod {
+	podResource := schema.GroupVersionResource{
+		Group:    "",
+		Version:  "v1",
+		Resource: "pods",
+	}
+	pods := &v1.PodList{}
+	unstructuredPods, err := dynamicClient.Resource(podResource).Namespace(namespace).List(context.TODO(), metav1.ListOptions{
+		FieldSelector: "spec.nodeName=" + nodeName,
+		LabelSelector: "name=ik8s-ovs",
+	})
+	if err != nil {
+		log.Fatal("Error on fetching ovs pods list: %v \n", err)
+	}
+	converter.FromUnstructured(unstructuredPods.UnstructuredContent(), pods)
+	return pods.Items[0]
 }
