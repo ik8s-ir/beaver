@@ -12,4 +12,5 @@ type OvsNet struct {
 
 type OvsNetSpec struct {
 	Bridge string `json:"bridge"`
+	Status string `jsob:"status"`
 }
