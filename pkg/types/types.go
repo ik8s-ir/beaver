@@ -14,3 +14,7 @@ type OvsNetSpec struct {
 	Bridge string `json:"bridge"`
 	Status string `jsob:"status"`
 }
+
+type VswitchPostBody struct {
+	Bridge string `json:"bridge"`
+}
