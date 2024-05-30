@@ -18,6 +18,7 @@ import (
 
 var converter = runtime.DefaultUnstructuredConverter
 var bridge string = ""
+var vni int32 = 101
 
 func AddEvent(obj interface{}) {
 	unstructuredObj := obj.(*unstructured.Unstructured)
@@ -38,16 +39,21 @@ func CreateDestributedVswitch(bridge string) {
 	nodes := k8s.FetchComputeNodes()
 
 	for _, node := range nodes.Items {
-		pod := k8s.GetOVSPodByNode("kube-system", node.GetName())
+		nodesIPs := helpers.FindOtherNodesIpAddresses(nodes, node.GetName())
 		retry := 0
 		for {
+			pod := k8s.GetOVSPodByNode("kube-system", node.GetName())
+			if pod == nil {
+				log.Printf("There's no ik8s-ovs pod on node %s", node.GetName())
+				break
+			}
 			var url string
 			if os.Getenv("ENV") == "development" {
 				url = "http://172.16.220.10:8000/v1alpha1/ovs"
 			} else {
 				url = "http://" + pod.GetName() + ".kube-system.svc.cluster.local:8000/ovs"
 			}
-			res, err := createVswitch(bridge, url)
+			res, err := createVswitch(bridge, url, nodesIPs)
 			if err == nil && res.StatusCode == http.StatusOK {
 				break
 			}
@@ -61,15 +67,25 @@ func CreateDestributedVswitch(bridge string) {
 				log.Fatalf("Hasn't success after 10 times.")
 				break
 			}
-			log.Printf("Retry %v/10 in 2 seconds ...\n", retry)
-			time.Sleep(2 * time.Second)
+			log.Printf("Retry %v/10 in 5 seconds ...\n", retry)
+			time.Sleep(5 * time.Second)
 		}
 	}
 }
 
-func createVswitch(bridge string, url string) (resp *http.Response, err error) {
+func createVswitch(bridge string, url string, nodeIps []string) (resp *http.Response, err error) {
+	var topology []types.MeshTopology
+	for _, nodeIP := range nodeIps {
+		topology = append(topology, types.MeshTopology{
+			NodeIP: nodeIP,
+			VNI:    vni,
+		})
+		vni++
+	}
+
 	body := &types.VswitchPostBody{
-		Bridge: bridge,
+		Bridge:   bridge,
+		Topology: topology,
 	}
 	jsonBody, _ := json.Marshal(body)
 	return http.Post(url, "application/json", bytes.NewBuffer(jsonBody))
