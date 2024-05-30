@@ -1,6 +1,10 @@
 package helpers
 
-import "strings"
+import (
+	"strings"
+
+	v1 "k8s.io/api/core/v1"
+)
 
 func NextBridgeID(c string, maxLen int) string {
 	if c == "" {
@@ -22,4 +26,21 @@ func NextBridgeID(c string, maxLen int) string {
 		ca[i]++
 	}
 	return string(ca)
+}
+
+func FindOtherNodesIpAddresses(nodes *v1.NodeList, nodeName string) []string {
+	var result []string
+	for _, node := range nodes.Items {
+		if node.GetName() != nodeName {
+			var internalIP string
+			for _, address := range node.Status.Addresses {
+				if address.Type == "InternalIP" {
+					internalIP = address.Address
+					break
+				}
+			}
+			result = append(result, internalIP)
+		}
+	}
+	return result
 }
