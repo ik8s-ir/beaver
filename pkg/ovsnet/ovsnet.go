@@ -28,6 +28,7 @@ func AddEvent(obj interface{}) {
 
 	bridge = helpers.NextBridgeID(bridge, 12)
 	log.Println(on.Namespace, on.Name)
+	k8s.AddFinalizer(unstructuredObj, "finalizer.ovsnet.networking.ik8s.ir")
 	CreateDestributedVswitch(bridge)
 	// ovsagent.CreateOVSNetwork(bridge, []string{"172.16.16.1"})
 

@@ -102,13 +102,23 @@ func GetOVSPodByNode(namespace string, nodeName string) *v1.Pod {
 	return nil
 }
 
-func addFinalizer(resource *unstructured.Unstructured, finalizer string) {
+func AddFinalizer(resource *unstructured.Unstructured, finalizer string) {
 	finalizers := resource.GetFinalizers()
 	for _, f := range finalizers {
 		if f == finalizer {
-			// Finalizer already present
 			return
 		}
 	}
 	resource.SetFinalizers(append(finalizers, finalizer))
+	ovsResource := schema.GroupVersionResource{
+		Group:    "networking.ik8s.ir",
+		Version:  "v1alpha1",
+		Resource: "ovsnets",
+	}
+
+	_, err := dynamicClient.Resource(ovsResource).Namespace(resource.GetNamespace()).Update(context.TODO(), resource, metav1.UpdateOptions{})
+	if err != nil {
+		log.Fatalf("couldn't set the finalizer for %s in namespace %s \n %v", resource.GetName(), resource.GetNamespace(), err)
+
+	}
 }
