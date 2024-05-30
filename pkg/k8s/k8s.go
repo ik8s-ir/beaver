@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/ik8s-ir/beaver/pkg/types"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -23,6 +24,11 @@ import (
 var dynamicClient *dynamic.DynamicClient
 var ovsInformer cache.SharedIndexInformer
 var converter = runtime.DefaultUnstructuredConverter
+var ovsnetResource = schema.GroupVersionResource{
+	Group:    "networking.ik8s.ir",
+	Version:  "v1alpha1",
+	Resource: "ovsnets",
+}
 
 func CreateClient() *dynamic.DynamicClient {
 	// singleton
@@ -102,23 +108,33 @@ func GetOVSPodByNode(namespace string, nodeName string) *v1.Pod {
 	return nil
 }
 
-func AddFinalizer(resource *unstructured.Unstructured, finalizer string) {
+func UpdateOVSnetBridge(on *types.OvsNet, bridge string) {
+	on.Spec.Bridge = bridge
+
+	unstructuredMap, _ := converter.ToUnstructured(on)
+	unstructuredON := &unstructured.Unstructured{
+		Object: unstructuredMap,
+	}
+	unstructuredON = addFinalizer(unstructuredON)
+	_, err := dynamicClient.Resource(ovsnetResource).Namespace(on.GetNamespace()).Update(context.TODO(), unstructuredON, metav1.UpdateOptions{})
+	if err != nil {
+		log.Fatalf("error on updating ovsnet %s in namespace %s, error: %v \n", on.GetName(), on.GetNamespace(), err)
+	}
+}
+
+func addFinalizer(resource *unstructured.Unstructured) *unstructured.Unstructured {
+	finalizer := "finalizer.ovsnet.networking.ik8s.ir"
 	finalizers := resource.GetFinalizers()
 	for _, f := range finalizers {
 		if f == finalizer {
-			return
+			return resource
 		}
 	}
 	resource.SetFinalizers(append(finalizers, finalizer))
-	ovsResource := schema.GroupVersionResource{
-		Group:    "networking.ik8s.ir",
-		Version:  "v1alpha1",
-		Resource: "ovsnets",
-	}
+	return resource
+}
 
-	_, err := dynamicClient.Resource(ovsResource).Namespace(resource.GetNamespace()).Update(context.TODO(), resource, metav1.UpdateOptions{})
-	if err != nil {
-		log.Fatalf("couldn't set the finalizer for %s in namespace %s \n %v", resource.GetName(), resource.GetNamespace(), err)
-
-	}
+func DeleteFinalizers(resource *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	resource.SetFinalizers(nil)
+	return dynamicClient.Resource(ovsnetResource).Namespace(resource.GetNamespace()).Update(context.TODO(), resource, metav1.UpdateOptions{})
 }

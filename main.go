@@ -16,8 +16,10 @@ func main() {
 	}
 	ovsInformer := k8s.CreateOVSInformer()
 	ovsInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: ovsnet.AddEvent,
+		AddFunc:    ovsnet.AddEvent,
+		UpdateFunc: ovsnet.UpdateEvent,
 	})
+
 	stopCh := make(chan struct{})
 	defer close(stopCh)
 	go ovsInformer.Run(stopCh)
