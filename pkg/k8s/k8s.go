@@ -9,6 +9,7 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
@@ -79,7 +80,7 @@ func FetchComputeNodes() *v1.NodeList {
 	return nodes
 }
 
-func GetOVSPodByNode(namespace string, nodeName string) v1.Pod {
+func GetOVSPodByNode(namespace string, nodeName string) *v1.Pod {
 	podResource := schema.GroupVersionResource{
 		Group:    "",
 		Version:  "v1",
@@ -91,8 +92,23 @@ func GetOVSPodByNode(namespace string, nodeName string) v1.Pod {
 		LabelSelector: "name=ik8s-ovs",
 	})
 	if err != nil {
-		log.Fatal("Error on fetching ovs pods list: %v \n", err)
+		log.Printf("Error on fetching ovs pods list: %v \n", err)
+		return nil
 	}
 	converter.FromUnstructured(unstructuredPods.UnstructuredContent(), pods)
-	return pods.Items[0]
+	if len(pods.Items) > 0 {
+		return &pods.Items[0]
+	}
+	return nil
+}
+
+func addFinalizer(resource *unstructured.Unstructured, finalizer string) {
+	finalizers := resource.GetFinalizers()
+	for _, f := range finalizers {
+		if f == finalizer {
+			// Finalizer already present
+			return
+		}
+	}
+	resource.SetFinalizers(append(finalizers, finalizer))
 }
