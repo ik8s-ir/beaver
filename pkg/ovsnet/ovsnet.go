@@ -3,8 +3,10 @@ package ovsnet
 import (
 	"bytes"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/ik8s-ir/beaver/pkg/helpers"
@@ -37,18 +39,27 @@ func CreateDestributedVswitch(bridge string) {
 
 	for _, node := range nodes.Items {
 		pod := k8s.GetOVSPodByNode("kube-system", node.GetName())
-		done := false
 		retry := 0
-		for !done {
-			_, err := createVswitch(bridge, "http://"+pod.GetName()+".kube-system.svc.cluster.local")
-			if err == nil {
-				done = true
+		for {
+			var url string
+			if os.Getenv("ENV") == "development" {
+				url = "http://172.16.220.10:8000/v1alpha1/ovs"
+			} else {
+				url = "http://" + pod.GetName() + ".kube-system.svc.cluster.local:8000/ovs"
 			}
-			log.Printf("Failed to create vswitch on pod %s , node %s.\n %v \n", pod.GetName(), node.GetName(), err)
+			res, err := createVswitch(bridge, url)
+			if err == nil && res.StatusCode == http.StatusOK {
+				break
+			}
+
+			body, _ := io.ReadAll(res.Body)
+			log.Printf("Received %v, Failed to create vswitch on pod %s , node %s.\n", res.StatusCode, pod.GetName(), node.GetName())
+			log.Printf("error: %v Response: %s", err, string(body))
 
 			retry++
 			if retry > 10 {
 				log.Fatalf("Hasn't success after 10 times.")
+				break
 			}
 			log.Printf("Retry %v/10 in 2 seconds ...\n", retry)
 			time.Sleep(2 * time.Second)
