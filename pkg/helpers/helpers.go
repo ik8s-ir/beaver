@@ -1,10 +1,16 @@
 package helpers
 
 import (
+	"fmt"
 	"strings"
+	"time"
 
 	v1 "k8s.io/api/core/v1"
 )
+
+func CreateUniqueTimeName() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano()/int64(time.Millisecond))
+}
 
 func NextBridgeID(c string, maxLen int) string {
 	if c == "" {
