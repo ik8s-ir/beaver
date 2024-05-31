@@ -16,7 +16,6 @@ import (
 )
 
 var converter = runtime.DefaultUnstructuredConverter
-var bridge string = ""
 var lastVNI int32 = 100
 
 func AddEvent(obj interface{}) {
@@ -25,14 +24,11 @@ func AddEvent(obj interface{}) {
 
 	converter.FromUnstructured(unstructuredObj.Object, on)
 
-	bridge = helpers.NextBridgeID(bridge, 12)
+	bridge := helpers.CreateUniqueTimeName()
 	log.Println(on.Namespace, on.Name)
 
 	CreateDestributedVswitch(bridge)
-	k8s.UpdateOVSnetBridge(on, bridge)
-	// ovsagent.CreateOVSNetwork(bridge, []string{"172.16.16.1"})
-
-	// 1. retrieve all kubernetes compute nodes.
+	// k8s.UpdateOVSnetBridge(on, bridge)
 }
 
 func UpdateEvent(_, obj interface{}) {
@@ -40,8 +36,8 @@ func UpdateEvent(_, obj interface{}) {
 	on := &types.OvsNet{}
 	converter.FromUnstructured(unstructuredObj.Object, on)
 	if on.Spec.Bridge != "" && on.GetDeletionTimestamp() != nil {
-		DeleteDestributedVswitch(bridge)
-		_, err := k8s.DeleteFinalizers(unstructuredObj)
+		DeleteDestributedVswitch(on.Spec.Bridge)
+		_, err := k8s.DeleteOVSNetFinalizers(unstructuredObj)
 		if err != nil {
 			log.Printf("finalizers deletion was failed on %s at the namespace %s.\n error: %v \n", on.GetName(), on.GetNamespace(), err)
 		}
@@ -67,6 +63,10 @@ func CreateDestributedVswitch(bridge string) {
 				url = "http://" + pod.GetName() + ".kube-system.svc.cluster.local:8000/ovs"
 			}
 			res, err := createVswitch(bridge, url, nodesIPs)
+			if err != nil && res == nil {
+				log.Println(err)
+				break
+			}
 			if err == nil && res.StatusCode == http.StatusOK {
 				break
 			}
@@ -105,6 +105,10 @@ func DeleteDestributedVswitch(bridge string) {
 				url = "http://" + pod.GetName() + ".kube-system.svc.cluster.local:8000/ovs"
 			}
 			res, err := deleteVswitch(bridge, url)
+			if err != nil && res == nil {
+				log.Println(err)
+				break
+			}
 			if err == nil && res.StatusCode == http.StatusOK {
 				break
 			}
