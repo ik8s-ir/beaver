@@ -93,7 +93,7 @@ func DeleteDestributedVswitch(bridge string) {
 	for _, node := range nodes.Items {
 		retry := 0
 		for {
-			pod := k8s.GetOVSPodByNode("kube-system", node.GetName())
+			pod := k8s.GetOVSPodByNode("ik8s-system", node.GetName())
 			if pod == nil {
 				log.Printf("There's no ik8s-ovs pod on node %s", node.GetName())
 				break
@@ -102,7 +102,7 @@ func DeleteDestributedVswitch(bridge string) {
 			if os.Getenv("ENV") == "development" {
 				url = "http://172.16.220.10:8000/v1alpha1/ovs"
 			} else {
-				url = "http://" + pod.GetName() + ".kube-system.svc.cluster.local:8000/ovs"
+				url = "http://" + pod.GetName() + ".ik8s-system.svc.cluster.local:8000/ovs"
 			}
 			res, err := deleteVswitch(bridge, url)
 			if err != nil && res == nil {
