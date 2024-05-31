@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: beaver
+  name: ik8s-beaver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ik8s-beaver
+  template:
+    metadata:
+      labels:
+        app: ik8s-beaver
+    spec:
+      containers:
+      - image: dr.ik8s.ir/beaver
+        imagePullPolicy: Always
+        name: ik8s-beaver
+        env:
+        - name: ENV
+          value: production
