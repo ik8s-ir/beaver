@@ -24,8 +24,7 @@ func AddEvent(obj interface{}) {
 
 	converter.FromUnstructured(unstructuredObj.Object, on)
 
-	bridge := helpers.CreateUniqueTimeName()
-	log.Println(on.Namespace, on.Name)
+	bridge := on.GetName()
 
 	CreateDestributedVswitch(bridge)
 	// k8s.UpdateOVSnetBridge(on, bridge)
@@ -80,8 +79,7 @@ func CreateDestributedVswitch(bridge string) {
 				log.Println("Hasn't success after 10 times.")
 				break
 			}
-			log.Printf("Retry %v/10 in 5 seconds ...\n", retry)
-			// time.Sleep(5 * time.Second)
+			log.Printf("Retry %v/10 \n", retry)
 		}
 	}
 	lastVNI += int32(len(nodes.Items))
@@ -122,8 +120,7 @@ func DeleteDestributedVswitch(bridge string) {
 				log.Printf("Hasn't success after 10 times.")
 				break
 			}
-			log.Printf("Retry %v/10 in 5 seconds ...\n", retry)
-			// time.Sleep(5 * time.Second)
+			log.Printf("Retry %v/10 ...\n", retry)
 		}
 	}
 }
