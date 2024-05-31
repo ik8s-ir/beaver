@@ -42,7 +42,3 @@ type NetworkAttachmentDefinitionList struct {
 
 	Items []NetworkAttachmentDefinition `json:"items"`
 }
-
-type NADConfig struct {
-	Type string `json:"type"`
-}
