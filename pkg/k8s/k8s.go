@@ -23,6 +23,7 @@ import (
 
 var dynamicClient *dynamic.DynamicClient
 var ovsInformer cache.SharedIndexInformer
+var nadInformer cache.SharedIndexInformer
 var converter = runtime.DefaultUnstructuredConverter
 var ovsnetResource = schema.GroupVersionResource{
 	Group:    "networking.ik8s.ir",
@@ -62,6 +63,17 @@ func CreateOVSInformer() cache.SharedIndexInformer {
 		return ovsInformer
 	}
 	resource := schema.GroupVersionResource{Group: "networking.ik8s.ir", Version: "v1alpha1", Resource: "ovsnets"}
+	informerfactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(CreateClient(), time.Second*30, "", nil)
+	ovsInformer = informerfactory.ForResource(resource).Informer()
+	return ovsInformer
+}
+
+func CreateNADInformer() cache.SharedIndexInformer {
+	if nadInformer != nil {
+		return nadInformer
+	}
+	resource := schema.GroupVersionResource{
+		Group: "k8s.cni.cncf.io", Version: "v1", Resource: "network-attachment-definitions"}
 	informerfactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(CreateClient(), time.Second*30, "", nil)
 	ovsInformer = informerfactory.ForResource(resource).Informer()
 	return ovsInformer
@@ -134,7 +146,36 @@ func addFinalizer(resource *unstructured.Unstructured) *unstructured.Unstructure
 	return resource
 }
 
-func DeleteFinalizers(resource *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+func DeleteOVSNetFinalizers(resource *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	resource.SetFinalizers(nil)
 	return dynamicClient.Resource(ovsnetResource).Namespace(resource.GetNamespace()).Update(context.TODO(), resource, metav1.UpdateOptions{})
+}
+
+func CreateOVSnet(name string, namespace string) {
+	on := &types.OvsNet{}
+	on.SetName(name)
+	on.SetNamespace(namespace)
+	on.Kind = "OVSNet"
+	on.APIVersion = "networking.ik8s.ir/v1alpha1"
+	unstructuredMap, _ := converter.ToUnstructured(on)
+	unstructuredON := &unstructured.Unstructured{
+		Object: unstructuredMap,
+	}
+	unstructuredON = addFinalizer(unstructuredON)
+	_, err := dynamicClient.Resource(ovsnetResource).Namespace(namespace).Create(context.TODO(), unstructuredON, metav1.CreateOptions{})
+	if err != nil {
+		log.Printf("error on ovsnet %s in namespace %s creation, error: %v \n", name, namespace, err)
+	}
+}
+
+func DeleteOVSnet(name string, namespace string) {
+	on, err := dynamicClient.Resource(ovsnetResource).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	if err != nil {
+		log.Printf("Error getting ovsnet %s at namespace %s, error:%v \n", name, namespace, err)
+	}
+	DeleteOVSNetFinalizers(on)
+	err = dynamicClient.Resource(ovsnetResource).Namespace(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		log.Printf("error on ovsnet %s in namespace %s creation, error: %v \n", name, namespace, err)
+	}
 }
