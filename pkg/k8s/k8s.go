@@ -107,7 +107,7 @@ func GetOVSPodByNode(namespace string, nodeName string) *v1.Pod {
 	pods := &v1.PodList{}
 	unstructuredPods, err := dynamicClient.Resource(podResource).Namespace(namespace).List(context.TODO(), metav1.ListOptions{
 		FieldSelector: "spec.nodeName=" + nodeName,
-		LabelSelector: "name=ik8s-ovs",
+		LabelSelector: "name=ik8s-beaveragent",
 	})
 	if err != nil {
 		log.Printf("Error on fetching ovs pods list: %v \n", err)
