@@ -30,6 +30,11 @@ var ovsnetResource = schema.GroupVersionResource{
 	Version:  "v1alpha1",
 	Resource: "ovsnets",
 }
+var nadResource = schema.GroupVersionResource{
+	Group:    "k8s.cni.cncf.io",
+	Version:  "v1",
+	Resource: "network-attachment-definitions",
+}
 
 func CreateClient() *dynamic.DynamicClient {
 	// singleton
@@ -72,10 +77,9 @@ func CreateNADInformer() cache.SharedIndexInformer {
 	if nadInformer != nil {
 		return nadInformer
 	}
-	resource := schema.GroupVersionResource{
-		Group: "k8s.cni.cncf.io", Version: "v1", Resource: "network-attachment-definitions"}
+
 	informerfactory := dynamicinformer.NewFilteredDynamicSharedInformerFactory(CreateClient(), time.Second*30, "", nil)
-	ovsInformer = informerfactory.ForResource(resource).Informer()
+	ovsInformer = informerfactory.ForResource(nadResource).Informer()
 	return ovsInformer
 }
 
@@ -151,21 +155,25 @@ func DeleteOVSNetFinalizers(resource *unstructured.Unstructured) (*unstructured.
 	return dynamicClient.Resource(ovsnetResource).Namespace(resource.GetNamespace()).Update(context.TODO(), resource, metav1.UpdateOptions{})
 }
 
-func CreateOVSnet(name string, namespace string) {
+func CreateOVSnet(name string, namespace string, nadName string) (*unstructured.Unstructured, error) {
 	on := &types.OvsNet{}
 	on.SetName(name)
-	on.SetNamespace(namespace)
 	on.Kind = "OVSNet"
+	labels := map[string]string{
+		"ovsnet.networking.ik8s.ir/namespace":           namespace,
+		"k8s.cni.cncf.io/network-attachment-definition": nadName,
+	}
+	on.SetLabels(labels)
 	on.APIVersion = "networking.ik8s.ir/v1alpha1"
-	unstructuredMap, _ := converter.ToUnstructured(on)
+	unstructuredMap, err := converter.ToUnstructured(on)
+	if err != nil {
+		log.Fatal(err)
+	}
 	unstructuredON := &unstructured.Unstructured{
 		Object: unstructuredMap,
 	}
 	unstructuredON = addFinalizer(unstructuredON)
-	_, err := dynamicClient.Resource(ovsnetResource).Namespace(namespace).Create(context.TODO(), unstructuredON, metav1.CreateOptions{})
-	if err != nil {
-		log.Printf("error on ovsnet %s in namespace %s creation, error: %v \n", name, namespace, err)
-	}
+	return dynamicClient.Resource(ovsnetResource).Create(context.TODO(), unstructuredON, metav1.CreateOptions{})
 }
 
 func DeleteOVSnet(name string, namespace string) {
@@ -178,4 +186,8 @@ func DeleteOVSnet(name string, namespace string) {
 	if err != nil {
 		log.Printf("error on ovsnet %s in namespace %s creation, error: %v \n", name, namespace, err)
 	}
+}
+
+func UpdateNAD(nad *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	return dynamicClient.Resource(nadResource).Namespace(nad.GetNamespace()).Update(context.TODO(), nad, metav1.UpdateOptions{})
 }
