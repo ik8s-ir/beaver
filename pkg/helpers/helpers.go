@@ -38,15 +38,20 @@ func FindOtherNodesIpAddresses(nodes *v1.NodeList, nodeName string) []string {
 	var result []string
 	for _, node := range nodes.Items {
 		if node.GetName() != nodeName {
-			var internalIP string
-			for _, address := range node.Status.Addresses {
-				if address.Type == "InternalIP" {
-					internalIP = address.Address
-					break
-				}
-			}
+			internalIP := FindNodeInternalIPAddress(node)
 			result = append(result, internalIP)
 		}
 	}
 	return result
+}
+
+func FindNodeInternalIPAddress(node v1.Node) string {
+	var internalIP string
+	for _, address := range node.Status.Addresses {
+		if address.Type == "InternalIP" {
+			internalIP = address.Address
+			break
+		}
+	}
+	return internalIP
 }
