@@ -1,30 +1,101 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: beaver-controller
+    app.kubernetes.io/version: 0.1.0-alpha1
+  name: beavercontroller
+  namespace: ik8s-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: beavercontroller
+    app.kubernetes.io/version: 0.1.0-alpha1
+  name: beavercontroller
+rules:
+- apiGroups:
+  - "networking.ik8s.ir"
+  resources:
+  - ovsnets
+  verbs:
+  - get
+  - list
+  - watch
+  - create
+  - update
+  - patch
+  - delete
+- apiGroups:
+  - "k8s.cni.cncf.io"
+  resources:
+  - network-attachment-definitions
+  verbs:
+  - get
+  - list
+  - watch
+  - update
+  - patch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: controller
+    app.kubernetes.io/name: beavercontroller
+    app.kubernetes.io/version: 0.1.0-alpha1
+  name: beavercontroller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: beavercontroller
+subjects:
+- kind: ServiceAccount
+  name: beavercontroller
+  namespace: ik8s-system
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
     app: beaver
-  name: ik8s-beaver
+  name: beavercontroller
+  namespace: ik8s-system
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: ik8s-beaver
+      app: beavercontroller
   template:
     metadata:
       labels:
-        app: ik8s-beaver
+        app: beavercontroller
     spec:
+      serviceAccount: beavercontroller
+      serviceAccountName: beavercontroller
       containers:
       - image: dr.ik8s.ir/beaver
         imagePullPolicy: Always
-        name: ik8s-beaver
+        name: beavercontroller
         env:
         - name: ENV
           value: production
         - name: NAMESPACE
           value: ik8s-system
         - name: BEAVERAGENTPODNAME
-          value: ik8s-beaveragent
+          value: beaveragent
         resources:
           requests:
             memory: "32Mi"
