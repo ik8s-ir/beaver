@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/ik8s-ir/beaver/pkg/helpers"
 	"github.com/ik8s-ir/beaver/pkg/k8s"
@@ -15,13 +16,17 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+var now = time.Now()
 var converter = runtime.DefaultUnstructuredConverter
 var lastVNI int32 = 100
 
 func AddEvent(obj interface{}) {
 	unstructuredObj := obj.(*unstructured.Unstructured)
-	on := &types.OvsNet{}
+	if unstructuredObj.GetCreationTimestamp().Time.Before(now) {
+		return
+	}
 
+	on := &types.OvsNet{}
 	converter.FromUnstructured(unstructuredObj.Object, on)
 
 	bridge := on.GetName()
@@ -34,8 +39,9 @@ func UpdateEvent(_, obj interface{}) {
 	unstructuredObj := obj.(*unstructured.Unstructured)
 	on := &types.OvsNet{}
 	converter.FromUnstructured(unstructuredObj.Object, on)
-	if on.Spec.Bridge != "" && on.GetDeletionTimestamp() != nil {
-		DeleteDestributedVswitch(on.Spec.Bridge)
+	log.Printf("updating... %s %s", on.GetName(), on.GetDeletionTimestamp())
+	if on.GetDeletionTimestamp() != nil {
+		DeleteDestributedVswitch(on.GetName())
 		_, err := k8s.DeleteOVSNetFinalizers(unstructuredObj)
 		if err != nil {
 			log.Printf("finalizers deletion was failed on %s at the namespace %s.\n error: %v \n", on.GetName(), on.GetNamespace(), err)
@@ -50,7 +56,7 @@ func CreateDestributedVswitch(bridge string) {
 		nodesIPs := helpers.FindOtherNodesIpAddresses(nodes, node.GetName())
 		retry := 0
 		for {
-			pod := k8s.GetOVSPodByNode("kube-system", node.GetName())
+			pod := k8s.GetOVSPodByNode(os.Getenv("NAMESPACE"), node.GetName())
 			if pod == nil {
 				log.Printf("There's no ik8s-ovs pod on node %s", node.GetName())
 				break
@@ -59,7 +65,7 @@ func CreateDestributedVswitch(bridge string) {
 			if os.Getenv("ENV") == "development" {
 				url = "http://172.16.220.10:8000/v1alpha1/ovs"
 			} else {
-				url = "http://" + pod.GetName() + ".kube-system.svc.cluster.local:8000/ovs"
+				url = "http://" + pod.GetName() + os.Getenv("NAMESPACE") + ".svc.cluster.local:8000/ovs"
 			}
 			res, err := createVswitch(bridge, url, nodesIPs)
 			if err != nil && res == nil {
@@ -86,21 +92,23 @@ func CreateDestributedVswitch(bridge string) {
 }
 
 func DeleteDestributedVswitch(bridge string) {
-	// 1. fertch compute nodes
+	log.Printf("deleting %s ...", bridge)
 	nodes := k8s.FetchComputeNodes()
+	// var failedNodes []string
 	for _, node := range nodes.Items {
 		retry := 0
 		for {
-			pod := k8s.GetOVSPodByNode("ik8s-system", node.GetName())
+			pod := k8s.GetOVSPodByNode(os.Getenv("NAMESPACE"), node.GetName())
 			if pod == nil {
-				log.Printf("There's no ik8s-ovs pod on node %s", node.GetName())
-				break
+				log.Printf("There's no ik8s-ovs pod on node %s namespace %s", node.GetName(), os.Getenv("NAMESPACE"))
+				// failedNodes = append(failedNodes, node.GetName())
+				continue
 			}
 			var url string
 			if os.Getenv("ENV") == "development" {
 				url = "http://172.16.220.10:8000/v1alpha1/ovs"
 			} else {
-				url = "http://" + pod.GetName() + ".ik8s-system.svc.cluster.local:8000/ovs"
+				url = "http://" + pod.GetName() + os.Getenv("NAMESPACE") + ".svc.cluster.local:8000/ovs"
 			}
 			res, err := deleteVswitch(bridge, url)
 			if err != nil && res == nil {
