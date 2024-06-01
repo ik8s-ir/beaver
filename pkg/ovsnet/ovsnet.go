@@ -39,8 +39,8 @@ func UpdateEvent(_, obj interface{}) {
 	unstructuredObj := obj.(*unstructured.Unstructured)
 	on := &types.OvsNet{}
 	converter.FromUnstructured(unstructuredObj.Object, on)
-	log.Printf("updating... %s %s", on.GetName(), on.GetDeletionTimestamp())
 	if on.GetDeletionTimestamp() != nil {
+		log.Printf("updating... %s %s", on.GetName(), on.GetDeletionTimestamp())
 		DeleteDestributedVswitch(on.GetName())
 		_, err := k8s.DeleteOVSNetFinalizers(unstructuredObj)
 		if err != nil {
@@ -50,10 +50,10 @@ func UpdateEvent(_, obj interface{}) {
 }
 
 func CreateDestributedVswitch(bridge string) {
-	// 1. fertch compute nodes
 	nodes := k8s.FetchComputeNodes()
 	for _, node := range nodes.Items {
 		nodesIPs := helpers.FindOtherNodesIpAddresses(nodes, node.GetName())
+		url := createURL(helpers.FindNodeInternalIPAddress(node))
 		retry := 0
 		for {
 			pod := k8s.GetOVSPodByNode(os.Getenv("NAMESPACE"), node.GetName())
@@ -61,12 +61,7 @@ func CreateDestributedVswitch(bridge string) {
 				log.Printf("There's no ik8s-ovs pod on node %s", node.GetName())
 				break
 			}
-			var url string
-			if os.Getenv("ENV") == "development" {
-				url = "http://172.16.220.10:8000/v1alpha1/ovs"
-			} else {
-				url = "http://" + pod.GetName() + os.Getenv("NAMESPACE") + ".svc.cluster.local:8000/ovs"
-			}
+
 			res, err := createVswitch(bridge, url, nodesIPs)
 			if err != nil && res == nil {
 				log.Println(err)
@@ -96,6 +91,7 @@ func DeleteDestributedVswitch(bridge string) {
 	nodes := k8s.FetchComputeNodes()
 	// var failedNodes []string
 	for _, node := range nodes.Items {
+		url := createURL(helpers.FindNodeInternalIPAddress(node))
 		retry := 0
 		for {
 			pod := k8s.GetOVSPodByNode(os.Getenv("NAMESPACE"), node.GetName())
@@ -103,12 +99,6 @@ func DeleteDestributedVswitch(bridge string) {
 				log.Printf("There's no ik8s-ovs pod on node %s namespace %s", node.GetName(), os.Getenv("NAMESPACE"))
 				// failedNodes = append(failedNodes, node.GetName())
 				continue
-			}
-			var url string
-			if os.Getenv("ENV") == "development" {
-				url = "http://172.16.220.10:8000/v1alpha1/ovs"
-			} else {
-				url = "http://" + pod.GetName() + os.Getenv("NAMESPACE") + ".svc.cluster.local:8000/ovs"
 			}
 			res, err := deleteVswitch(bridge, url)
 			if err != nil && res == nil {
@@ -156,4 +146,14 @@ func deleteVswitch(bridge string, url string) (*http.Response, error) {
 	client := &http.Client{}
 	req, _ := http.NewRequest(http.MethodDelete, url+"/"+bridge, nil)
 	return client.Do(req)
+}
+
+func createURL(ip string) string {
+	var url string
+	if os.Getenv("ENV") == "development" {
+		url = "http://172.16.220.10:8000/v1alpha1/ovs"
+	} else {
+		url = "http://" + ip + ":8000/v1alpha1/ovs"
+	}
+	return url
 }
