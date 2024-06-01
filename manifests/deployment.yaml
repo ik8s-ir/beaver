@@ -21,3 +21,14 @@ spec:
         env:
         - name: ENV
           value: production
+        - name: NAMESPACE
+          value: ik8s-system
+        - name: BEAVERAGENTPODNAME
+          value: ik8s-beaveragent
+        resources:
+          requests:
+            memory: "32Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
