@@ -21,11 +21,14 @@ func AddEvent(obj interface{}) {
 	var nadConfig map[string]interface{}
 	err := json.Unmarshal([]byte(nad.Spec.Config), &nadConfig)
 	if err != nil {
-		log.Println("Error unmarshaling nad config json: %v", err)
+		log.Printf("Error unmarshaling nad config json: %v \n", err)
 		return
 	}
 
 	if nad.GetName() == "default" || nadConfig["type"] != "ovs" {
+		return
+	}
+	if nadConfig["bridge"] != "" {
 		return
 	}
 
@@ -35,9 +38,6 @@ func AddEvent(obj interface{}) {
 		if err != nil {
 			log.Printf("error on creating %s (cluster level) for namespace %s, err: %v \n retrying...\n", nad.GetName(), nad.GetNamespace(), err)
 		} else {
-			if nadConfig["bridge"] != "" {
-				break
-			}
 			nadConfig["bridge"] = bridgeName
 			jsonNadConfig, _ := json.Marshal(nadConfig)
 			nad.Spec.Config = string(jsonNadConfig)
