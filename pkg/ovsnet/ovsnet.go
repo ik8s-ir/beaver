@@ -18,7 +18,6 @@ import (
 
 var now = time.Now()
 var converter = runtime.DefaultUnstructuredConverter
-var lastVNI int32 = 100
 
 func AddEvent(obj interface{}) {
 	unstructuredObj := obj.(*unstructured.Unstructured)
@@ -50,19 +49,22 @@ func UpdateEvent(_, obj interface{}) {
 }
 
 func CreateDestributedVswitch(bridge string) {
+	lastVNI := findLastVNI()
 	nodes := k8s.FetchComputeNodes()
 	for _, node := range nodes.Items {
+		lastVNI := findLastVNI()
 		nodesIPs := helpers.FindOtherNodesIpAddresses(nodes, node.GetName())
 		url := createURL(helpers.FindNodeInternalIPAddress(node))
 		retry := 0
 		for {
+
 			pod := k8s.GetOVSPodByNode(os.Getenv("NAMESPACE"), node.GetName())
 			if pod == nil {
 				log.Printf("There's no ik8s-ovs pod on node %s", node.GetName())
 				break
 			}
 
-			res, err := createVswitch(bridge, url, nodesIPs)
+			res, err := createVswitch(bridge, url, nodesIPs, lastVNI)
 			if err != nil && res == nil {
 				log.Println(err)
 				break
@@ -83,12 +85,14 @@ func CreateDestributedVswitch(bridge string) {
 			log.Printf("Retry %v/10 \n", retry)
 		}
 	}
-	lastVNI += int32(len(nodes.Items))
+	lastVNI += len(nodes.Items)
+	updateLastVNI(lastVNI)
 }
 
 func DeleteDestributedVswitch(bridge string) {
 	log.Printf("deleting %s ...", bridge)
 	nodes := k8s.FetchComputeNodes()
+
 	// var failedNodes []string
 	for _, node := range nodes.Items {
 		url := createURL(helpers.FindNodeInternalIPAddress(node))
@@ -123,14 +127,13 @@ func DeleteDestributedVswitch(bridge string) {
 	}
 }
 
-func createVswitch(bridge string, url string, nodeIps []string) (resp *http.Response, err error) {
+func createVswitch(bridge string, url string, nodeIps []string, lastVNI int) (resp *http.Response, err error) {
 	var topology []types.MeshTopology
-	vni := lastVNI
 	for _, nodeIP := range nodeIps {
-		vni++
+		vni := lastVNI + 1
 		topology = append(topology, types.MeshTopology{
 			NodeIP: nodeIP,
-			VNI:    vni,
+			VNI:    int32(vni),
 		})
 	}
 
@@ -156,4 +159,63 @@ func createURL(ip string) string {
 		url = "http://" + ip + ":8000/v1alpha1/ovs"
 	}
 	return url
+}
+
+func findLastVNI() int {
+	for {
+		c := 0
+		v, err := k8s.GetLastOVSVNI()
+		if err != nil {
+			log.Printf("try %d, Error on getting the last ovs vni: %v \n", c, err)
+			time.Sleep(time.Second * 1)
+			c++
+			continue
+		}
+		if v == nil {
+			_, err := k8s.CreateOVSVNI("last", 200)
+			if err != nil {
+				log.Fatalf("error on creating initial OVS VNI: %v", err)
+			}
+			return 200
+		}
+		vni := &types.OVSVNI{}
+		converter.FromUnstructured(v.Object, vni)
+		labels := vni.GetLabels()
+		if labels["mutext"] != "" {
+			log.Printf("The last vni are in use, wait till mutex remove")
+			continue
+		}
+
+		return vni.Spec.VNI
+	}
+}
+
+func updateLastVNI(vni int) {
+	c := 0
+	for {
+		lastVNIunstructured, err := k8s.GetLastOVSVNI()
+		if err != nil {
+			log.Printf("try %d, Error on getting the last ovs vni: %v \n", c, err)
+			time.Sleep(time.Second * 1)
+			c++
+			continue
+		}
+		lastVNI := &types.OVSVNI{}
+		converter.FromUnstructured(lastVNIunstructured.Object, lastVNI)
+		labels := map[string]string{
+			"mutext": "",
+		}
+		lastVNI.SetLabels(labels)
+		lastVNI.Spec.VNI = vni
+		unstructuredMap, _ := converter.ToUnstructured(lastVNI)
+		unstructuredON := &unstructured.Unstructured{
+			Object: unstructuredMap,
+		}
+		_, err = k8s.UpdateOVSVNI(unstructuredON)
+		if err != nil {
+			log.Printf("try %d, Error on updating the last ovs vni: %v \n", c, err)
+			continue
+		}
+		break
+	}
 }

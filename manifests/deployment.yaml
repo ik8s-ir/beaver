@@ -21,6 +21,7 @@ rules:
   - "networking.ik8s.ir"
   resources:
   - ovsnets
+  - ovsvnis
   verbs:
   - get
   - list

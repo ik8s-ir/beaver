@@ -42,3 +42,13 @@ type NetworkAttachmentDefinitionList struct {
 
 	Items []NetworkAttachmentDefinition `json:"items"`
 }
+
+type OVSVNI struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              OVSVNISpec `json:"spec"`
+}
+
+type OVSVNISpec struct {
+	VNI int `json:"vni"`
+}

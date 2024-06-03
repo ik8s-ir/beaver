@@ -35,6 +35,11 @@ var nadResource = schema.GroupVersionResource{
 	Version:  "v1",
 	Resource: "network-attachment-definitions",
 }
+var ovsVNIResource = schema.GroupVersionResource{
+	Group:    "networking.ik8s.ir",
+	Version:  "v1alpha1",
+	Resource: "ovsvnis",
+}
 
 func CreateClient() *dynamic.DynamicClient {
 	// singleton
@@ -190,4 +195,28 @@ func DeleteOVSnet(name string, namespace string) {
 
 func UpdateNAD(nad *unstructured.Unstructured) (*unstructured.Unstructured, error) {
 	return dynamicClient.Resource(nadResource).Namespace(nad.GetNamespace()).Update(context.TODO(), nad, metav1.UpdateOptions{})
+}
+
+func GetLastOVSVNI() (*unstructured.Unstructured, error) {
+	return dynamicClient.Resource(ovsVNIResource).Get(context.TODO(), "last", metav1.GetOptions{})
+}
+
+func CreateOVSVNI(name string, vniIndex int) (*unstructured.Unstructured, error) {
+	vni := &types.OVSVNI{}
+	vni.Kind = "OVSVNI"
+	vni.SetName(name)
+	vni.Spec.VNI = vniIndex
+	vni.APIVersion = "networking.ik8s.ir/v1alpha1"
+	unstructuredMap, err := converter.ToUnstructured(vni)
+	if err != nil {
+		log.Fatal(err)
+	}
+	unstructuredVni := &unstructured.Unstructured{
+		Object: unstructuredMap,
+	}
+	return dynamicClient.Resource(ovsVNIResource).Create(context.TODO(), unstructuredVni, metav1.CreateOptions{})
+}
+
+func UpdateOVSVNI(obj *unstructured.Unstructured) (*unstructured.Unstructured, error) {
+	return dynamicClient.Resource(ovsVNIResource).Update(context.TODO(), obj, metav1.UpdateOptions{})
 }

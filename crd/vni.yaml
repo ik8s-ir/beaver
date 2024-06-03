@@ -1,0 +1,32 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: ovsvnis.networking.ik8s.ir
+spec:
+  group: networking.ik8s.ir
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              properties:
+                vni:
+                  type: integer
+                mutex:
+                  type: string
+      additionalPrinterColumns:
+        - name: vni
+          type: integer
+          jsonPath: .spec.vni
+  scope: Cluster
+  names:
+    kind: OVSVNI
+    plural: ovsvnis
+    singular: ovsvni
+    shortNames:
+    - ovni
