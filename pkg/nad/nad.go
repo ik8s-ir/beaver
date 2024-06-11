@@ -75,7 +75,7 @@ func UpdateEvent(_, obj interface{}) {
 	bridgeName := nadConfig["bridge"].(string)
 
 	for {
-		err := k8s.DeleteOVSnet(bridgeName, nad.GetNamespace())
+		err := k8s.DeleteOVSnet(bridgeName)
 		if err != nil {
 			log.Printf("error on deleting ovsnet %s for nad %s (cluster level) for namespace %s, err: %v \n retrying...\n", bridgeName, nad.GetName(), nad.GetNamespace(), err)
 			continue

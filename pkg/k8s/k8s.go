@@ -181,13 +181,13 @@ func CreateOVSnet(name string, namespace string, nadName string) (*unstructured.
 	return dynamicClient.Resource(ovsnetResource).Create(context.TODO(), unstructuredON, metav1.CreateOptions{})
 }
 
-func DeleteOVSnet(name string, namespace string) error {
-	on, err := dynamicClient.Resource(ovsnetResource).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+func DeleteOVSnet(name string) error {
+	on, err := dynamicClient.Resource(ovsnetResource).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
 	DeleteOVSNetFinalizers(on)
-	return dynamicClient.Resource(ovsnetResource).Namespace(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	return dynamicClient.Resource(ovsnetResource).Delete(context.TODO(), name, metav1.DeleteOptions{})
 }
 
 func UpdateNAD(nad *unstructured.Unstructured) (*unstructured.Unstructured, error) {
