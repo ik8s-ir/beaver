@@ -43,7 +43,7 @@ func UpdateEvent(_, obj interface{}) {
 		DeleteDestributedVswitch(on.GetName())
 		_, err := k8s.DeleteOVSNetFinalizers(unstructuredObj)
 		if err != nil {
-			log.Printf("finalizers deletion was failed on %s at the namespace %s.\n error: %v \n", on.GetName(), on.GetNamespace(), err)
+			log.Printf("ovsnet finalizers deletion was failed on %s .\n error: %v \n", on.GetName(), err)
 		}
 	}
 }
