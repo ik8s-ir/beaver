@@ -32,6 +32,7 @@ func AddEvent(obj interface{}) {
 		return
 	}
 
+	nad.SetFinalizers([]string{"ovsnet.networking.ik8s.ir"})
 	for {
 		bridgeName := helpers.CreateUniqueTimeName()
 		_, err := k8s.CreateOVSnet(bridgeName, nad.GetNamespace(), nad.GetName())
@@ -53,4 +54,37 @@ func AddEvent(obj interface{}) {
 		}
 	}
 	// k8s.DeleteOVSnet(nad.GetName())
+}
+
+func UpdateEvent(_, obj interface{}) {
+	unstructuredObj := obj.(*unstructured.Unstructured)
+	nad := &types.NetworkAttachmentDefinition{}
+	converter.FromUnstructured(unstructuredObj.Object, nad)
+
+	var nadConfig map[string]interface{}
+	err := json.Unmarshal([]byte(nad.Spec.Config), &nadConfig)
+	if err != nil {
+		log.Printf("Error unmarshaling nad config json: %v \n", err)
+		return
+	}
+
+	if nad.GetName() == "default" || nadConfig["type"] != "ovs" || nad.GetDeletionTimestamp() == nil {
+		return
+	}
+
+	bridgeName := nadConfig["bridge"].(string)
+
+	for {
+		err := k8s.DeleteOVSnet(bridgeName, nad.GetNamespace())
+		if err != nil {
+			log.Printf("error on deleting ovsnet %s for nad %s (cluster level) for namespace %s, err: %v \n retrying...\n", bridgeName, nad.GetName(), nad.GetNamespace(), err)
+			continue
+		}
+		_, err = k8s.DeleteNADFinalizers(unstructuredObj)
+		if err != nil {
+			log.Printf("error on deleting finalizers for nad %s in namespaces %s", nad.GetName(), nad.GetNamespace())
+			continue
+		}
+		break
+	}
 }
