@@ -22,7 +22,8 @@ func main() {
 	})
 	nadInformer := k8s.CreateNADInformer()
 	nadInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
-		AddFunc: nad.AddEvent,
+		AddFunc:    nad.AddEvent,
+		UpdateFunc: nad.UpdateEvent,
 	})
 	stopCh := make(chan struct{})
 	defer close(stopCh)
